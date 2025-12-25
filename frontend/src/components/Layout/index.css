@@ -1,0 +1,75 @@
+.app-layout {
+  min-height: 100vh;
+}
+
+.app-sider {
+  overflow: auto;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.app-sider .logo {
+  height: 64px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.app-header {
+  padding: 0 24px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 240px;
+  z-index: 100;
+}
+
+.app-header .header-left {
+  display: flex;
+  align-items: center;
+}
+
+.app-header .trigger {
+  font-size: 18px;
+  line-height: 64px;
+  padding: 0 24px;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.app-header .trigger:hover {
+  color: #1890ff;
+}
+
+.app-header .header-right {
+  display: flex;
+  align-items: center;
+}
+
+.app-content {
+  margin: 88px 24px 24px 264px;
+  padding: 24px;
+  background: #fff;
+  min-height: calc(100vh - 112px);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.app-sider.collapsed + .ant-layout .app-header {
+  left: 80px;
+}
+
+.app-sider.collapsed ~ .ant-layout .app-content {
+  margin-left: 104px;
+}
+
