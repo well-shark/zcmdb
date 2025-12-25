@@ -17,7 +17,8 @@ import {
   Select,
   Descriptions,
   Tabs,
-  Divider
+  Divider,
+  AutoComplete
 } from 'antd'
 import {
   PlusOutlined,
@@ -28,8 +29,9 @@ import {
   ReloadOutlined,
   KeyOutlined
 } from '@ant-design/icons'
-import { getCloudAccounts, getCloudAccount, createCloudAccount, updateCloudAccount, deleteCloudAccount, createAccessKey, updateAccessKey, deleteAccessKey } from '@/api/cloudAccounts'
+import { getCloudAccounts, getCloudAccount, createCloudAccount, updateCloudAccount, deleteCloudAccount, createAccessKey, updateAccessKey, deleteAccessKey, getCloudProviderValues } from '@/api/cloudAccounts'
 import { useAuthStore } from '@/store/auth'
+import PasswordDisplay from '@/components/PasswordDisplay'
 
 const { Title } = Typography
 const { Option } = Select
@@ -47,13 +49,22 @@ const CloudAccounts = () => {
   const [keyForm] = Form.useForm()
   const [searchText, setSearchText] = useState('')
   const [selectedProvider, setSelectedProvider] = useState(null)
+  const [cloudProviderOptions, setCloudProviderOptions] = useState([])
   const { user } = useAuthStore()
-
-  const cloudProviders = ['阿里云', '腾讯云', 'AWS', 'Azure', '华为云', '其他']
 
   useEffect(() => {
     fetchAccounts()
+    fetchCloudProviderValues()
   }, [])
+
+  const fetchCloudProviderValues = async () => {
+    try {
+      const response = await getCloudProviderValues()
+      setCloudProviderOptions(response.values || [])
+    } catch (error) {
+      console.error('获取云平台列表失败', error)
+    }
+  }
 
   const fetchAccounts = async () => {
     setLoading(true)
@@ -301,7 +312,7 @@ const CloudAccounts = () => {
               onChange={setSelectedProvider}
               allowClear
             >
-              {cloudProviders.map(provider => (
+              {cloudProviderOptions.map(provider => (
                 <Option key={provider} value={provider}>{provider}</Option>
               ))}
             </Select>
@@ -337,7 +348,12 @@ const CloudAccounts = () => {
                   size="small"
                   columns={[
                     { title: 'Access Key', dataIndex: 'access_key', key: 'access_key' },
-                    { title: 'Secret Key', dataIndex: 'secret_key', key: 'secret_key', render: (text) => text ? '***' : '-' },
+                    { 
+                      title: 'Secret Key', 
+                      dataIndex: 'secret_key', 
+                      key: 'secret_key', 
+                      render: (text) => text ? <PasswordDisplay value={text} /> : '-' 
+                    },
                     { title: '分配给', dataIndex: 'assigned_to', key: 'assigned_to' },
                     { title: '描述', dataIndex: 'description', key: 'description' },
                     {
@@ -382,12 +398,13 @@ const CloudAccounts = () => {
         width={700}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="cloud_provider" label="云平台" rules={[{ required: true, message: '请选择云平台' }]}>
-            <Select placeholder="请选择云平台">
-              {cloudProviders.map(provider => (
-                <Option key={provider} value={provider}>{provider}</Option>
-              ))}
-            </Select>
+          <Form.Item name="cloud_provider" label="云平台" rules={[{ required: true, message: '请输入云平台' }]}>
+            <AutoComplete
+              options={cloudProviderOptions.map(v => ({ value: v }))}
+              placeholder="请输入或选择云平台，如：阿里云、腾讯云、AWS等"
+              onSearch={fetchCloudProviderValues}
+              allowClear
+            />
           </Form.Item>
           <Form.Item name="account_name" label="账号" rules={[{ required: true, message: '请输入账号' }]}>
             <Input />
@@ -418,7 +435,9 @@ const CloudAccounts = () => {
           <Descriptions column={2} bordered>
             <Descriptions.Item label="云平台">{viewData.cloud_provider}</Descriptions.Item>
             <Descriptions.Item label="账号">{viewData.account_name}</Descriptions.Item>
-            <Descriptions.Item label="密码">{viewData.password ? '***' : '-'}</Descriptions.Item>
+            <Descriptions.Item label="密码">
+              {viewData.password ? <PasswordDisplay value={viewData.password} /> : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label="绑定手机号">{viewData.phone || '-'}</Descriptions.Item>
             <Descriptions.Item label="余额">{viewData.balance !== null && viewData.balance !== undefined ? `¥${viewData.balance.toFixed(2)}` : '-'}</Descriptions.Item>
             <Descriptions.Item label="创建时间">{new Date(viewData.created_at).toLocaleString()}</Descriptions.Item>
@@ -429,7 +448,12 @@ const CloudAccounts = () => {
                   size="small"
                   columns={[
                     { title: 'Access Key', dataIndex: 'access_key', key: 'access_key' },
-                    { title: 'Secret Key', dataIndex: 'secret_key', key: 'secret_key', render: (text) => text ? '***' : '-' },
+                    { 
+                      title: 'Secret Key', 
+                      dataIndex: 'secret_key', 
+                      key: 'secret_key', 
+                      render: (text) => text ? <PasswordDisplay value={text} /> : '-' 
+                    },
                     { title: '分配给', dataIndex: 'assigned_to', key: 'assigned_to' },
                     { title: '描述', dataIndex: 'description', key: 'description' }
                   ]}

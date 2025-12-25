@@ -1,12 +1,23 @@
-import React, { useState, useEffect } from 'react'
-import { Form, Input, Button, Space, Table, Popconfirm, message } from 'antd'
+import React, { useState, useEffect, useRef } from 'react'
+import { Form, Input, Button, Space, Table, Popconfirm, message, Select } from 'antd'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 
 const CredentialManager = ({ value = [], onChange }) => {
   const [dataSource, setDataSource] = useState(value || [])
+  const valueRef = useRef(value)
+  const isInternalUpdate = useRef(false)
 
   useEffect(() => {
-    setDataSource(value || [])
+    // 只在外部value真正改变时更新（避免内部更新导致的循环）
+    if (!isInternalUpdate.current) {
+      const currentValue = JSON.stringify(value || [])
+      const currentRef = JSON.stringify(valueRef.current || [])
+      if (currentValue !== currentRef) {
+        valueRef.current = value
+        setDataSource(value || [])
+      }
+    }
+    isInternalUpdate.current = false
   }, [value])
 
   const handleAdd = () => {
@@ -19,12 +30,14 @@ const CredentialManager = ({ value = [], onChange }) => {
     }
     const newData = [...dataSource, newRow]
     setDataSource(newData)
+    isInternalUpdate.current = true
     onChange?.(newData)
   }
 
   const handleDelete = (rowKey) => {
     const newData = dataSource.filter(item => item.rowKey !== rowKey)
     setDataSource(newData)
+    isInternalUpdate.current = true
     onChange?.(newData)
   }
 
@@ -36,6 +49,7 @@ const CredentialManager = ({ value = [], onChange }) => {
       return item
     })
     setDataSource(newData)
+    isInternalUpdate.current = true
     onChange?.(newData)
   }
 
@@ -44,13 +58,16 @@ const CredentialManager = ({ value = [], onChange }) => {
       title: '类型',
       dataIndex: 'credential_type',
       key: 'credential_type',
-      width: 100,
+      width: 120,
       render: (text, record) => (
-        <Input
+        <Select
           value={text}
-          onChange={(e) => handleFieldChange(record.rowKey, 'credential_type', e.target.value)}
-          placeholder="如：password"
-        />
+          onChange={(value) => handleFieldChange(record.rowKey, 'credential_type', value)}
+          style={{ width: '100%' }}
+        >
+          <Select.Option value="password">密码</Select.Option>
+          <Select.Option value="ssh_key">密钥</Select.Option>
+        </Select>
       )
     },
     {

@@ -98,9 +98,14 @@ const DatabaseAssets = () => {
     try {
       const response = await getAsset(record.id)
       const databases = Array.isArray(response.databases) ? response.databases : []
+      // 处理多端口数据
+      const ports = Array.isArray(response.ports) ? response.ports : []
+      const portsText = ports.map(p => `${p.name || ''}:${p.port || ''}`).join(', ')
+      
       form.setFieldsValue({
         ...response,
         databases: databases.join(', '),
+        ports_text: portsText,
         tag_ids: response.tags ? response.tags.map(t => t.id) : []
       })
       setEditingAsset(record)
@@ -125,12 +130,29 @@ const DatabaseAssets = () => {
       const values = await form.validateFields()
       const databases = values.databases ? values.databases.split(',').map(db => db.trim()).filter(db => db) : []
       
+      // 解析多端口数据，格式：名称1:端口1,名称2:端口2 或 端口1,端口2
+      let ports = null
+      if (values.ports_text) {
+        const portsList = values.ports_text.split(',').map(p => p.trim()).filter(p => p)
+        ports = portsList.map(p => {
+          if (p.includes(':')) {
+            const [name, port] = p.split(':').map(s => s.trim())
+            return { name, port: parseInt(port) || null }
+          } else {
+            const port = parseInt(p)
+            return { name: null, port: port || null }
+          }
+        }).filter(p => p.port !== null)
+        if (ports.length === 0) ports = null
+      }
+      
       const data = {
         asset_type: 'database',
         name: values.name,
         db_type: values.db_type,
         host: values.host,
         port: values.port,
+        ports: ports,
         databases: databases,
         quota: values.quota || null,
         notes: values.notes || null,
@@ -221,6 +243,20 @@ const DatabaseAssets = () => {
           ))}
         </Space>
       )
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: (text) => text ? new Date(text).toLocaleString('zh-CN') : '-'
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      width: 180,
+      render: (text) => text ? new Date(text).toLocaleString('zh-CN') : '-'
     },
     {
       title: '操作',
@@ -338,16 +374,26 @@ const DatabaseAssets = () => {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item name="port" label="端口" rules={[
-                { required: true, message: '请输入端口' },
+              <Form.Item name="port" label="主端口" rules={[
+                { required: true, message: '请输入主端口' },
                 { type: 'number', min: 1, max: 65535, message: '端口范围在 1-65535' }
               ]}>
                 <InputNumber min={1} max={65535} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item 
+            name="ports_text" 
+            label="多端口（可选，如Clickhouse）"
+            tooltip="格式：名称1:端口1,名称2:端口2 或 端口1,端口2，例如：HTTP:8123,Native:9000 或 8123,9000"
+          >
+            <Input placeholder="如：HTTP:8123,Native:9000 或留空" />
+          </Form.Item>
           <Form.Item name="databases" label="数据库列表">
-            <Input.TextArea rows={3} placeholder="请输入数据库名称，多个用逗号分隔，如：db1,db2,db3" />
+            <Input.TextArea 
+              rows={3} 
+              placeholder="请输入数据库名称，每行一个，或使用逗号分隔，如：&#10;db1&#10;db2&#10;db3&#10;或：db1,db2,db3" 
+            />
           </Form.Item>
           <Form.Item name="quota" label="配额">
             <Input placeholder="如：100GB" />
@@ -373,12 +419,29 @@ const DatabaseAssets = () => {
             <Descriptions.Item label="名称">{viewData.name}</Descriptions.Item>
             <Descriptions.Item label="数据库类型">{viewData.db_type || '-'}</Descriptions.Item>
             <Descriptions.Item label="地址">{viewData.host || '-'}</Descriptions.Item>
-            <Descriptions.Item label="端口">{viewData.port || '-'}</Descriptions.Item>
+            <Descriptions.Item label="主端口">{viewData.port || '-'}</Descriptions.Item>
+            {viewData.ports && viewData.ports.length > 0 && (
+              <Descriptions.Item label="多端口" span={2}>
+                {viewData.ports.map((p, idx) => (
+                  <Tag key={idx} style={{ marginRight: 8 }}>
+                    {p.name ? `${p.name}:${p.port}` : p.port}
+                  </Tag>
+                ))}
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label="数据库列表" span={2}>
-              {Array.isArray(viewData.databases) ? viewData.databases.join(', ') : (viewData.databases || '-')}
+              {Array.isArray(viewData.databases) ? (
+                <div>
+                  {viewData.databases.map((db, idx) => (
+                    <Tag key={idx} style={{ marginBottom: 4 }}>{db}</Tag>
+                  ))}
+                </div>
+              ) : (viewData.databases || '-')}
             </Descriptions.Item>
             <Descriptions.Item label="配额">{viewData.quota || '-'}</Descriptions.Item>
             <Descriptions.Item label="备注" span={2}>{viewData.notes || '-'}</Descriptions.Item>
+            <Descriptions.Item label="创建时间">{viewData.created_at ? new Date(viewData.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
+            <Descriptions.Item label="更新时间">{viewData.updated_at ? new Date(viewData.updated_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
           </Descriptions>
         )}
       </Modal>

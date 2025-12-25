@@ -36,6 +36,7 @@ import { getCloudAccounts } from '@/api/cloudAccounts'
 import dayjs from 'dayjs'
 import TagSelector from '@/components/TagSelector'
 import CredentialManager from '@/components/CredentialManager'
+import PasswordDisplay from '@/components/PasswordDisplay'
 
 const { Title } = Typography
 const { Option } = Select
@@ -56,6 +57,7 @@ const CloudAssets = () => {
   const [osVersionOptions, setOsVersionOptions] = useState([])
   const [regionOptions, setRegionOptions] = useState([])
   const [zoneOptions, setZoneOptions] = useState([])
+  const [instanceTypeOptions, setInstanceTypeOptions] = useState([])
   const [fileList, setFileList] = useState([])
   const [importing, setImporting] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState([])
@@ -114,10 +116,33 @@ const CloudAssets = () => {
     }
   }
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setEditingAsset(null)
     form.resetFields()
     setModalVisible(true)
+    // 预加载所有历史值
+    await loadAllFieldValues()
+  }
+
+  const loadAllFieldValues = async () => {
+    try {
+      // 并行加载所有字段的历史值
+      const [osNameRes, osVersionRes, regionRes, zoneRes, instanceTypeRes] = await Promise.all([
+        getFieldValues('cloud', 'os_name').catch(() => ({ values: [] })),
+        getFieldValues('cloud', 'os_version').catch(() => ({ values: [] })),
+        getFieldValues('cloud', 'region').catch(() => ({ values: [] })),
+        getFieldValues('cloud', 'zone').catch(() => ({ values: [] })),
+        getFieldValues('cloud', 'instance_type').catch(() => ({ values: [] }))
+      ])
+      
+      setOsNameOptions(osNameRes.values || [])
+      setOsVersionOptions(osVersionRes.values || [])
+      setRegionOptions(regionRes.values || [])
+      setZoneOptions(zoneRes.values || [])
+      setInstanceTypeOptions(instanceTypeRes.values || [])
+    } catch (error) {
+      console.error('加载历史值失败', error)
+    }
   }
 
   const handleEdit = async (record) => {
@@ -145,11 +170,14 @@ const CloudAssets = () => {
         disk_space: parseNumber(response.disk_space),
         purchase_date: response.purchase_date ? dayjs(response.purchase_date) : null,
         expires_at: response.expires_at ? dayjs(response.expires_at) : null,
+        ssh_port: response.ssh_port || 22,
         tag_ids: response.tags ? response.tags.map(t => t.id) : [],
         credentials: credentials
       })
       setEditingAsset(record)
       setModalVisible(true)
+      // 预加载所有历史值
+      await loadAllFieldValues()
     } catch (error) {
       message.error('获取云节点信息失败')
     }
@@ -171,20 +199,26 @@ const CloudAssets = () => {
       const data = {
         asset_type: 'cloud',
         name: values.name,
+        cloud_account_id: values.cloud_account_id || null,
         instance_id: values.instance_id || null,
         instance_name: values.instance_name || null,
         region: values.region || null,
         zone: values.zone || null,
         public_ipv4: values.public_ipv4 || null,
         private_ipv4: values.private_ipv4 || null,
+        ipv6: values.ipv6 || null,
         instance_type: values.instance_type || null,
         cpu: values.cpu ? `${values.cpu}核` : null,
         memory: values.memory ? `${values.memory}GB` : null,
         disk_space: values.disk_space ? `${values.disk_space}GB` : null,
         os_name: values.os_name || null,
         os_version: values.os_version || null,
+        bandwidth: values.bandwidth || null,
+        bandwidth_billing_mode: values.bandwidth_billing_mode || null,
+        ssh_port: values.ssh_port || 22,
         purchase_date: values.purchase_date ? values.purchase_date.format('YYYY-MM-DD') : null,
         expires_at: values.expires_at ? values.expires_at.format('YYYY-MM-DD') : null,
+        payment_method: values.payment_method || null,
         notes: values.notes || null,
         tag_ids: values.tag_ids || [],
         credentials: (values.credentials || []).map(cred => ({
@@ -307,6 +341,17 @@ const CloudAssets = () => {
         setOsVersionOptions(response.values || [])
       } catch (error) {
         console.error('获取系统版本列表失败', error)
+      }
+    }
+  }
+
+  const handleSearchInstanceType = async (value) => {
+    if (instanceTypeOptions.length === 0) {
+      try {
+        const response = await getFieldValues('cloud', 'instance_type')
+        setInstanceTypeOptions(response.values || [])
+      } catch (error) {
+        console.error('获取实例类型列表失败', error)
       }
     }
   }
@@ -517,8 +562,12 @@ const CloudAssets = () => {
         title={editingAsset ? '编辑云节点' : '新增云节点'}
         open={modalVisible}
         onOk={handleSubmit}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          setModalVisible(false)
+          form.resetFields()
+        }}
         width={800}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
@@ -577,26 +626,45 @@ const CloudAssets = () => {
               </Form.Item>
             </Col>
           </Row>
+          <Form.Item name="ipv6" label="IPv6">
+            <Input placeholder="IPv6地址" />
+          </Form.Item>
           <Form.Item name="instance_type" label="实例类型">
-            <Input placeholder="如：ecs.c6.large" />
+            <AutoComplete
+              options={instanceTypeOptions.map(v => ({ value: v }))}
+              placeholder="如：ecs.c6.large"
+              onSearch={handleSearchInstanceType}
+            />
           </Form.Item>
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="cpu" label="CPU">
-                <InputNumber min={1} max={1000} style={{ width: '100%' }} />
-                <span style={{ marginLeft: 8, color: '#909399' }}>核</span>
+                <InputNumber 
+                  min={1} 
+                  max={1000} 
+                  style={{ width: '100%' }} 
+                  addonAfter="核"
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item name="memory" label="内存">
-                <InputNumber min={1} max={10000} style={{ width: '100%' }} />
-                <span style={{ marginLeft: 8, color: '#909399' }}>GB</span>
+                <InputNumber 
+                  min={1} 
+                  max={10000} 
+                  style={{ width: '100%' }} 
+                  addonAfter="GB"
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item name="disk_space" label="磁盘空间">
-                <InputNumber min={1} max={100000} style={{ width: '100%' }} />
-                <span style={{ marginLeft: 8, color: '#909399' }}>GB</span>
+                <InputNumber 
+                  min={1} 
+                  max={100000} 
+                  style={{ width: '100%' }} 
+                  addonAfter="GB"
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -617,6 +685,37 @@ const CloudAssets = () => {
                   placeholder="如：22.04"
                   onSearch={handleSearchOsVersion}
                 />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="bandwidth" label="带宽">
+                <Input placeholder="如：100Mbps" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="bandwidth_billing_mode" label="带宽计费模式">
+                <Select placeholder="请选择" allowClear>
+                  <Option value="按流量">按流量</Option>
+                  <Option value="按带宽">按带宽</Option>
+                  <Option value="包年包月">包年包月</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="ssh_port" label="SSH端口">
+                <InputNumber min={1} max={65535} style={{ width: '100%' }} placeholder="默认22" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="payment_method" label="付费方式">
+                <Select placeholder="请选择" allowClear>
+                  <Option value="prepaid">预付费</Option>
+                  <Option value="postpaid">后付费</Option>
+                </Select>
               </Form.Item>
             </Col>
           </Row>
@@ -654,18 +753,34 @@ const CloudAssets = () => {
         {viewData && (
           <Descriptions column={2} bordered>
             <Descriptions.Item label="名称">{viewData.name}</Descriptions.Item>
+            <Descriptions.Item label="云账号">
+              {viewData.cloud_account_id ? (
+                cloudAccounts.find(acc => acc.id === viewData.cloud_account_id) 
+                  ? `${cloudAccounts.find(acc => acc.id === viewData.cloud_account_id).cloud_provider} - ${cloudAccounts.find(acc => acc.id === viewData.cloud_account_id).account_name}`
+                  : `ID: ${viewData.cloud_account_id}`
+              ) : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label="实例名">{viewData.instance_name || '-'}</Descriptions.Item>
             <Descriptions.Item label="实例ID">{viewData.instance_id || '-'}</Descriptions.Item>
             <Descriptions.Item label="地域">{viewData.region || '-'}</Descriptions.Item>
             <Descriptions.Item label="可用区">{viewData.zone || '-'}</Descriptions.Item>
-            <Descriptions.Item label="公网IP">{viewData.public_ipv4 || '-'}</Descriptions.Item>
-            <Descriptions.Item label="内网IP">{viewData.private_ipv4 || '-'}</Descriptions.Item>
+            <Descriptions.Item label="公网IPv4">{viewData.public_ipv4 || '-'}</Descriptions.Item>
+            <Descriptions.Item label="内网IPv4">{viewData.private_ipv4 || '-'}</Descriptions.Item>
+            <Descriptions.Item label="IPv6">{viewData.ipv6 || '-'}</Descriptions.Item>
             <Descriptions.Item label="实例类型">{viewData.instance_type || '-'}</Descriptions.Item>
             <Descriptions.Item label="CPU">{viewData.cpu || '-'}</Descriptions.Item>
             <Descriptions.Item label="内存">{viewData.memory || '-'}</Descriptions.Item>
             <Descriptions.Item label="磁盘空间">{viewData.disk_space || '-'}</Descriptions.Item>
             <Descriptions.Item label="操作系统">{viewData.os_name || '-'}</Descriptions.Item>
             <Descriptions.Item label="系统版本">{viewData.os_version || '-'}</Descriptions.Item>
+            <Descriptions.Item label="带宽">{viewData.bandwidth || '-'}</Descriptions.Item>
+            <Descriptions.Item label="带宽计费模式">{viewData.bandwidth_billing_mode || '-'}</Descriptions.Item>
+            <Descriptions.Item label="SSH端口">{viewData.ssh_port || 22}</Descriptions.Item>
+            <Descriptions.Item label="付费方式">
+              {viewData.payment_method === 'prepaid' ? '预付费' : 
+               viewData.payment_method === 'postpaid' ? '后付费' : 
+               viewData.payment_method || '-'}
+            </Descriptions.Item>
             <Descriptions.Item label="购买日期">{viewData.purchase_date || '-'}</Descriptions.Item>
             <Descriptions.Item label="到期时间">{viewData.expires_at || '-'}</Descriptions.Item>
             <Descriptions.Item label="登录凭据" span={2}>
@@ -675,7 +790,12 @@ const CloudAssets = () => {
                   columns={[
                     { title: '类型', dataIndex: 'credential_type', key: 'credential_type' },
                     { title: '用户名/Key', dataIndex: 'key', key: 'key' },
-                    { title: '密码/Value', dataIndex: 'value', key: 'value', render: (text) => text ? '***' : '-' },
+                    { 
+                      title: '密码/Value', 
+                      dataIndex: 'value', 
+                      key: 'value', 
+                      render: (text) => text ? <PasswordDisplay value={text} /> : '-' 
+                    },
                     { title: '描述', dataIndex: 'description', key: 'description' }
                   ]}
                   dataSource={viewData.credentials}

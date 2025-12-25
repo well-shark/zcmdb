@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
 from app.models import *  # 导入所有模型
-from app.api import auth, users, assets, tags, credentials, notifications, files, cloud_accounts
+from app.api import auth, users, assets, tags, credentials, notifications, files, cloud_accounts, migration
 
 app = FastAPI(
     title="ZCMDB API",
@@ -29,6 +29,7 @@ app.include_router(credentials.router, prefix=settings.API_V1_PREFIX)
 app.include_router(notifications.router, prefix=settings.API_V1_PREFIX)
 app.include_router(files.router, prefix=settings.API_V1_PREFIX)
 app.include_router(cloud_accounts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(migration.router, prefix=settings.API_V1_PREFIX)
 
 
 @app.get("/")

@@ -131,6 +131,9 @@ const HardwareAssets = () => {
         serial_number: values.serial_number || null,
         purchase_date: values.purchase_date ? values.purchase_date.format('YYYY-MM-DD') : null,
         purchase_price: values.purchase_price || null,
+        responsible_person: values.responsible_person || null,
+        user: values.user || null,
+        usage_area: values.usage_area || null,
         notes: values.notes || null,
         tag_ids: values.tag_ids || []
       }
@@ -201,6 +204,20 @@ const HardwareAssets = () => {
           ))}
         </Space>
       )
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: (text) => text ? new Date(text).toLocaleString('zh-CN') : '-'
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      width: 180,
+      render: (text) => text ? new Date(text).toLocaleString('zh-CN') : '-'
     },
     {
       title: '操作',
@@ -331,6 +348,23 @@ const HardwareAssets = () => {
               </Form.Item>
             </Col>
           </Row>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item name="responsible_person" label="责任人">
+                <Input placeholder="责任人姓名" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="user" label="使用人">
+                <Input placeholder="使用人姓名" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="usage_area" label="使用区域">
+                <Input placeholder="如：办公室A、机房B等" />
+              </Form.Item>
+            </Col>
+          </Row>
           <Form.Item name="tag_ids" label="标签">
             <TagSelector />
           </Form.Item>
@@ -356,7 +390,12 @@ const HardwareAssets = () => {
             <Descriptions.Item label="序列号">{viewData.serial_number || '-'}</Descriptions.Item>
             <Descriptions.Item label="购买日期">{viewData.purchase_date || '-'}</Descriptions.Item>
             <Descriptions.Item label="购买价格">{viewData.purchase_price || '-'}</Descriptions.Item>
+            <Descriptions.Item label="责任人">{viewData.responsible_person || '-'}</Descriptions.Item>
+            <Descriptions.Item label="使用人">{viewData.user || '-'}</Descriptions.Item>
+            <Descriptions.Item label="使用区域">{viewData.usage_area || '-'}</Descriptions.Item>
             <Descriptions.Item label="备注" span={2}>{viewData.notes || '-'}</Descriptions.Item>
+            <Descriptions.Item label="创建时间">{viewData.created_at ? new Date(viewData.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
+            <Descriptions.Item label="更新时间">{viewData.updated_at ? new Date(viewData.updated_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
           </Descriptions>
         )}
       </Modal>

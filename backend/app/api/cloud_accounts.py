@@ -14,6 +14,20 @@ from app.core.encryption import encrypt_value, decrypt_value
 router = APIRouter(prefix="/cloud-accounts", tags=["云账号管理"])
 
 
+@router.get("/field-values/cloud_provider", response_model=dict)
+async def get_cloud_provider_values(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """获取云平台字段的所有已有值（用于自动完成）"""
+    results = db.query(CloudAccount.cloud_provider).filter(
+        CloudAccount.cloud_provider.isnot(None),
+        CloudAccount.cloud_provider != ""
+    ).distinct().all()
+    values = [r[0] for r in results if r[0]]
+    return {"values": sorted(set(values))}
+
+
 @router.get("", response_model=List[CloudAccountSchema])
 async def get_cloud_accounts(
     cloud_provider: Optional[str] = Query(None),

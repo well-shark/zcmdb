@@ -14,6 +14,7 @@ import CloudAccounts from '@/pages/CloudAccounts'
 import Notifications from '@/pages/Notifications'
 import Settings from '@/pages/Settings'
 import Profile from '@/pages/Profile'
+import Migration from '@/pages/Migration'
 
 export const router = createBrowserRouter([
   {
@@ -88,6 +89,10 @@ export const router = createBrowserRouter([
       {
         path: 'profile',
         element: <Profile />
+      },
+      {
+        path: 'migration',
+        element: <Migration />
       }
     ]
   }

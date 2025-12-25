@@ -12,5 +12,8 @@ class HardwareAsset(Base):
     serial_number = Column(String(200))
     purchase_date = Column(Date)
     purchase_price = Column(Numeric(10, 2))
+    responsible_person = Column(String(100))  # 责任人
+    user = Column(String(100))  # 使用人
+    usage_area = Column(String(200))  # 使用区域
     notes = Column(Text)
 

@@ -32,3 +32,7 @@ export const deleteAccessKey = (accountId, keyId) => {
   return api.delete(`/cloud-accounts/${accountId}/access-keys/${keyId}`)
 }
 
+export const getCloudProviderValues = () => {
+  return api.get('/cloud-accounts/field-values/cloud_provider')
+}
+

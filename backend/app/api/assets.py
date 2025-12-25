@@ -160,9 +160,11 @@ def build_asset_response(asset: Asset, extended_asset: Any, db: Session, current
     elif asset.asset_type == "system" and extended_asset:
         system = extended_asset
         result.update({
-            "system_type": system.system_type,
             "ip_address": str(system.ip_address) if system.ip_address else None,
             "port": system.port,
+            "default_account": system.default_account,
+            "default_password": decrypt_value(system.default_password_encrypted) if system.default_password_encrypted and current_user.is_admin else None,
+            "default_password_encrypted": system.default_password_encrypted if current_user.is_admin else None,
             "login_url": system.login_url,
             "notes": system.notes,
         })
@@ -172,6 +174,7 @@ def build_asset_response(asset: Asset, extended_asset: Any, db: Session, current
             "db_type": database.db_type,
             "host": database.host,
             "port": database.port,
+            "ports": database.ports if database.ports else [],
             "databases": database.databases,
             "quota": database.quota,
             "notes": database.notes,
@@ -185,6 +188,9 @@ def build_asset_response(asset: Asset, extended_asset: Any, db: Session, current
             "serial_number": hardware.serial_number,
             "purchase_date": hardware.purchase_date.isoformat() if hardware.purchase_date else None,
             "purchase_price": float(hardware.purchase_price) if hardware.purchase_price else None,
+            "responsible_person": hardware.responsible_person,
+            "user": hardware.user,
+            "usage_area": hardware.usage_area,
             "notes": hardware.notes,
         })
     
@@ -250,6 +256,12 @@ async def get_field_values(
             results = db.query(CloudAsset.zone).filter(
                 CloudAsset.zone.isnot(None),
                 CloudAsset.zone != ""
+            ).distinct().all()
+            values = [r[0] for r in results if r[0]]
+        elif field == "instance_type":
+            results = db.query(CloudAsset.instance_type).filter(
+                CloudAsset.instance_type.isnot(None),
+                CloudAsset.instance_type != ""
             ).distinct().all()
             values = [r[0] for r in results if r[0]]
     
@@ -512,9 +524,10 @@ async def create_asset(
     elif asset_in.asset_type == "system" and isinstance(asset_in, SystemAssetCreate):
         system = SystemAsset(
             id=asset.id,
-            system_type=asset_in.system_type,
             ip_address=asset_in.ip_address,
             port=asset_in.port,
+            default_account=asset_in.default_account,
+            default_password_encrypted=encrypt_value(asset_in.default_password) if asset_in.default_password else None,
             login_url=asset_in.login_url,
             notes=asset_in.notes
         )
@@ -526,6 +539,7 @@ async def create_asset(
             db_type=asset_in.db_type,
             host=asset_in.host,
             port=asset_in.port,
+            ports=asset_in.ports if asset_in.ports else None,
             databases=asset_in.databases,
             quota=asset_in.quota,
             notes=asset_in.notes
@@ -541,6 +555,9 @@ async def create_asset(
             serial_number=asset_in.serial_number,
             purchase_date=asset_in.purchase_date,
             purchase_price=asset_in.purchase_price,
+            responsible_person=asset_in.responsible_person,
+            user=asset_in.user,
+            usage_area=asset_in.usage_area,
             notes=asset_in.notes
         )
         db.add(hardware)
@@ -647,9 +664,11 @@ async def update_asset(
     
     elif asset_in.asset_type == "system" and isinstance(asset_in, SystemAssetCreate) and extended:
         system = extended
-        system.system_type = asset_in.system_type
         system.ip_address = asset_in.ip_address
         system.port = asset_in.port
+        system.default_account = asset_in.default_account
+        if asset_in.default_password:
+            system.default_password_encrypted = encrypt_value(asset_in.default_password)
         system.login_url = asset_in.login_url
         system.notes = asset_in.notes
     
@@ -658,6 +677,7 @@ async def update_asset(
         database.db_type = asset_in.db_type
         database.host = asset_in.host
         database.port = asset_in.port
+        database.ports = asset_in.ports if asset_in.ports else None
         database.databases = asset_in.databases
         database.quota = asset_in.quota
         database.notes = asset_in.notes
@@ -670,6 +690,9 @@ async def update_asset(
         hardware.serial_number = asset_in.serial_number
         hardware.purchase_date = asset_in.purchase_date
         hardware.purchase_price = asset_in.purchase_price
+        hardware.responsible_person = asset_in.responsible_person
+        hardware.user = asset_in.user
+        hardware.usage_area = asset_in.usage_area
         hardware.notes = asset_in.notes
     
     db.commit()
@@ -717,12 +740,41 @@ async def download_import_template(
         columns = [
             "名称*", "实例ID", "实例名", "地域", "可用区", "公网IPv4", "内网IPv4",
             "实例类型", "CPU(核)*", "内存(GB)*", "磁盘空间(GB)*", "操作系统", "系统版本",
-            "购买日期(YYYY-MM-DD)", "到期时间(YYYY-MM-DD)", "备注"
+            "购买日期(YYYY-MM-DD)", "到期时间(YYYY-MM-DD)", 
+            "登录凭据(格式:类型|用户名|密码|描述,多个用分号分隔)", "备注"
         ]
         sample_data = [
             ["云服务器1", "i-123456", "云服务器1", "cn-beijing", "cn-beijing-a", 
              "1.2.3.4", "192.168.1.100", "ecs.t5-lc1m1.small", "2", "4", "40",
-             "Ubuntu", "22.04", "2024-01-01", "2025-01-01", "测试云服务器"]
+             "Ubuntu", "22.04", "2024-01-01", "2025-01-01", 
+             "password|root|123456|root账号;password|ubuntu|ubuntu123|ubuntu账号", "测试云服务器"]
+        ]
+    elif asset_type == "system":
+        columns = [
+            "名称*", "IP地址", "端口", "默认账号", "默认密码", "登录链接",
+            "登录凭据(格式:类型|用户名|密码|描述,多个用分号分隔)", "备注"
+        ]
+        sample_data = [
+            ["Git系统", "192.168.1.100", "8080", "admin", "admin123", "http://192.168.1.100:8080",
+             "password|admin|admin123|管理员账号;password|git|git123|Git账号", "内部Git系统"]
+        ]
+    elif asset_type == "database":
+        columns = [
+            "名称*", "数据库类型*", "地址*", "主端口*", "多端口(格式:名称:端口,名称:端口)", 
+            "数据库列表(每行一个或逗号分隔)", "配额", "备注"
+        ]
+        sample_data = [
+            ["Clickhouse集群", "ClickHouse", "192.168.1.100", "9000", "HTTP:8123,Native:9000",
+             "db1\ndb2\ndb3", "500GB", "ClickHouse数据库集群"]
+        ]
+    elif asset_type == "hardware":
+        columns = [
+            "名称*", "硬件类型*", "品牌", "型号", "序列号", "购买日期(YYYY-MM-DD)", 
+            "购买价格", "责任人", "使用人", "使用区域", "备注"
+        ]
+        sample_data = [
+            ["开发机001", "PC", "联想", "ThinkPad X1", "SN123456", "2024-01-01", 
+             "8000", "张三", "李四", "办公室A", "开发人员使用"]
         ]
     else:
         raise HTTPException(
@@ -796,6 +848,28 @@ async def batch_import_assets(
     for idx, row in df.iterrows():
         try:
             row_num = idx + 2  # Excel行号（从2开始，因为有表头）
+            
+            # 解析登录凭据（格式:类型|用户名|密码|描述,多个用分号分隔）
+            def parse_credentials(cred_str):
+                """解析登录凭据字符串"""
+                credentials = []
+                if pd.notna(cred_str) and str(cred_str).strip():
+                    cred_list = str(cred_str).strip().split(';')
+                    for cred_item in cred_list:
+                        parts = [p.strip() for p in cred_item.split('|')]
+                        if len(parts) >= 3:
+                            cred_type = parts[0] if parts[0] else 'password'
+                            key = parts[1] if len(parts) > 1 else ''
+                            value = parts[2] if len(parts) > 2 else ''
+                            description = parts[3] if len(parts) > 3 else None
+                            if key and value:
+                                credentials.append({
+                                    "credential_type": cred_type,
+                                    "key": key,
+                                    "value": value,
+                                    "description": description
+                                })
+                return credentials
             
             # 构建资产创建对象
             asset_data = {
@@ -925,7 +999,106 @@ async def batch_import_assets(
                     errors.append(f"第{row_num}行 ({asset_data['name']}): CPU、内存或磁盘空间格式错误")
                     continue
                 
+                # 解析登录凭据
+                cred_str = row.get("登录凭据(格式:类型|用户名|密码|描述,多个用分号分隔)", "")
+                asset_data["credentials"] = parse_credentials(cred_str)
+                
                 asset_in = CloudAssetCreate(**asset_data)
+            elif asset_type == "system":
+                asset_data.update({
+                    "ip_address": str(row.get("IP地址", "")).strip() or None,
+                    "port": int(row.get("端口", 0)) if pd.notna(row.get("端口")) and str(row.get("端口")).strip() else None,
+                    "default_account": str(row.get("默认账号", "")).strip() or None,
+                    "default_password": str(row.get("默认密码", "")).strip() or None,
+                    "login_url": str(row.get("登录链接", "")).strip() or None,
+                    "notes": str(row.get("备注", "")).strip() or None,
+                })
+                
+                # 解析登录凭据
+                cred_str = row.get("登录凭据(格式:类型|用户名|密码|描述,多个用分号分隔)", "")
+                asset_data["credentials"] = parse_credentials(cred_str)
+                
+                asset_in = SystemAssetCreate(**asset_data)
+            elif asset_type == "database":
+                # 解析多端口
+                ports = None
+                ports_str = str(row.get("多端口(格式:名称:端口,名称:端口)", "")).strip()
+                if ports_str:
+                    ports_list = [p.strip() for p in ports_str.split(',') if p.strip()]
+                    ports = []
+                    for p in ports_list:
+                        if ':' in p:
+                            name, port = p.split(':', 1)
+                            try:
+                                ports.append({"name": name.strip(), "port": int(port.strip())})
+                            except:
+                                pass
+                        else:
+                            try:
+                                ports.append({"name": None, "port": int(p.strip())})
+                            except:
+                                pass
+                    if len(ports) == 0:
+                        ports = None
+                
+                # 解析数据库列表
+                databases = []
+                db_str = str(row.get("数据库列表(每行一个或逗号分隔)", "")).strip()
+                if db_str:
+                    # 先按换行符分割，再按逗号分割
+                    db_list = []
+                    for line in db_str.split('\n'):
+                        db_list.extend([d.strip() for d in line.split(',') if d.strip()])
+                    databases = list(set(db_list))  # 去重
+                
+                asset_data.update({
+                    "db_type": str(row.get("数据库类型*", row.get("数据库类型", ""))).strip(),
+                    "host": str(row.get("地址*", row.get("地址", ""))).strip(),
+                    "port": int(row.get("主端口*", row.get("主端口", 0))),
+                    "ports": ports,
+                    "databases": databases if databases else None,
+                    "quota": str(row.get("配额", "")).strip() or None,
+                    "notes": str(row.get("备注", "")).strip() or None,
+                })
+                
+                if not asset_data["db_type"] or not asset_data["host"] or not asset_data["port"]:
+                    errors.append(f"第{row_num}行 ({asset_data['name']}): 数据库类型、地址或主端口不能为空")
+                    continue
+                
+                asset_in = DatabaseAssetCreate(**asset_data)
+            elif asset_type == "hardware":
+                purchase_date = None
+                if pd.notna(row.get("购买日期(YYYY-MM-DD)", row.get("购买日期", None))):
+                    try:
+                        purchase_date = pd.to_datetime(row.get("购买日期(YYYY-MM-DD)", row.get("购买日期"))).date()
+                    except:
+                        pass
+                
+                purchase_price = None
+                if pd.notna(row.get("购买价格", None)):
+                    try:
+                        purchase_price = float(row.get("购买价格"))
+                    except:
+                        pass
+                
+                asset_data.update({
+                    "hardware_type": str(row.get("硬件类型*", row.get("硬件类型", ""))).strip(),
+                    "brand": str(row.get("品牌", "")).strip() or None,
+                    "model": str(row.get("型号", "")).strip() or None,
+                    "serial_number": str(row.get("序列号", "")).strip() or None,
+                    "purchase_date": purchase_date,
+                    "purchase_price": purchase_price,
+                    "responsible_person": str(row.get("责任人", "")).strip() or None,
+                    "user": str(row.get("使用人", "")).strip() or None,
+                    "usage_area": str(row.get("使用区域", "")).strip() or None,
+                    "notes": str(row.get("备注", "")).strip() or None,
+                })
+                
+                if not asset_data["hardware_type"]:
+                    errors.append(f"第{row_num}行 ({asset_data['name']}): 硬件类型不能为空")
+                    continue
+                
+                asset_in = HardwareAssetCreate(**asset_data)
             else:
                 errors.append(f"第{row_num}行: 不支持的资产类型: {asset_type}")
                 continue
@@ -947,15 +1120,26 @@ async def batch_import_assets(
             
             # 处理凭据
             if asset_in.credentials:
-                for cred_in in asset_in.credentials:
-                    credential = Credential(
-                        asset_id=asset.id,
-                        credential_type=cred_in.credential_type,
-                        key=cred_in.key,
-                        value_encrypted=encrypt_value(cred_in.value),
-                        description=cred_in.description
-                    )
-                    db.add(credential)
+                for cred_dict in asset_in.credentials:
+                    if isinstance(cred_dict, dict):
+                        credential = Credential(
+                            asset_id=asset.id,
+                            credential_type=cred_dict.get("credential_type", "password"),
+                            key=cred_dict.get("key", ""),
+                            value_encrypted=encrypt_value(cred_dict.get("value", "")),
+                            description=cred_dict.get("description")
+                        )
+                        db.add(credential)
+                    else:
+                        # 兼容旧的CredentialCreate对象
+                        credential = Credential(
+                            asset_id=asset.id,
+                            credential_type=cred_dict.credential_type,
+                            key=cred_dict.key,
+                            value_encrypted=encrypt_value(cred_dict.value),
+                            description=cred_dict.description
+                        )
+                        db.add(credential)
             
             # 创建扩展记录
             if asset_type == "server" and isinstance(asset_in, ServerAssetCreate):
@@ -1000,6 +1184,44 @@ async def batch_import_assets(
                     notes=asset_in.notes
                 )
                 db.add(cloud)
+            elif asset_type == "system" and isinstance(asset_in, SystemAssetCreate):
+                system = SystemAsset(
+                    id=asset.id,
+                    ip_address=asset_in.ip_address,
+                    port=asset_in.port,
+                    default_account=asset_in.default_account,
+                    default_password_encrypted=encrypt_value(asset_in.default_password) if asset_in.default_password else None,
+                    login_url=asset_in.login_url,
+                    notes=asset_in.notes
+                )
+                db.add(system)
+            elif asset_type == "database" and isinstance(asset_in, DatabaseAssetCreate):
+                database = DatabaseAsset(
+                    id=asset.id,
+                    db_type=asset_in.db_type,
+                    host=asset_in.host,
+                    port=asset_in.port,
+                    ports=asset_in.ports if asset_in.ports else None,
+                    databases=asset_in.databases,
+                    quota=asset_in.quota,
+                    notes=asset_in.notes
+                )
+                db.add(database)
+            elif asset_type == "hardware" and isinstance(asset_in, HardwareAssetCreate):
+                hardware = HardwareAsset(
+                    id=asset.id,
+                    hardware_type=asset_in.hardware_type,
+                    brand=asset_in.brand,
+                    model=asset_in.model,
+                    serial_number=asset_in.serial_number,
+                    purchase_date=asset_in.purchase_date,
+                    purchase_price=asset_in.purchase_price,
+                    responsible_person=asset_in.responsible_person,
+                    user=asset_in.user,
+                    usage_area=asset_in.usage_area,
+                    notes=asset_in.notes
+                )
+                db.add(hardware)
             
             db.commit()
             created_count += 1

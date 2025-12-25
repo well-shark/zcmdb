@@ -14,7 +14,6 @@ import {
   Card,
   Row,
   Col,
-  AutoComplete,
   Descriptions,
   Select
 } from 'antd'
@@ -29,6 +28,8 @@ import {
 import { getAssets, getAsset, createAsset, updateAsset, deleteAsset, getFieldValues } from '@/api/assets'
 import { getTags } from '@/api/tags'
 import TagSelector from '@/components/TagSelector'
+import CredentialManager from '@/components/CredentialManager'
+import PasswordDisplay from '@/components/PasswordDisplay'
 
 const { Title } = Typography
 
@@ -43,7 +44,6 @@ const SystemAssets = () => {
   const [searchText, setSearchText] = useState('')
   const [selectedTags, setSelectedTags] = useState([])
   const [allTags, setAllTags] = useState([])
-  const [systemTypeOptions, setSystemTypeOptions] = useState([])
 
   useEffect(() => {
     fetchAssets()
@@ -97,9 +97,19 @@ const SystemAssets = () => {
   const handleEdit = async (record) => {
     try {
       const response = await getAsset(record.id)
+      // 转换凭据数据格式
+      const credentials = (response.credentials || []).map((cred, index) => ({
+        rowKey: cred.id?.toString() || `cred_${index}`,
+        credential_type: cred.credential_type || 'password',
+        key: cred.key || '',
+        value: cred.value || '',
+        description: cred.description || ''
+      }))
+      
       form.setFieldsValue({
         ...response,
-        tag_ids: response.tags ? response.tags.map(t => t.id) : []
+        tag_ids: response.tags ? response.tags.map(t => t.id) : [],
+        credentials: credentials
       })
       setEditingAsset(record)
       setModalVisible(true)
@@ -124,12 +134,19 @@ const SystemAssets = () => {
       const data = {
         asset_type: 'system',
         name: values.name,
-        system_type: values.system_type || null,
         ip_address: values.ip_address || null,
         port: values.port || null,
+        default_account: values.default_account || null,
+        default_password: values.default_password || null,
         login_url: values.login_url || null,
         notes: values.notes || null,
-        tag_ids: values.tag_ids || []
+        tag_ids: values.tag_ids || [],
+        credentials: (values.credentials || []).map(cred => ({
+          credential_type: cred.credential_type || 'password',
+          key: cred.key || '',
+          value: cred.value || '',
+          description: cred.description || ''
+        })).filter(cred => cred.key && cred.value)
       }
       
       if (editingAsset) {
@@ -156,16 +173,6 @@ const SystemAssets = () => {
     }
   }
 
-  const handleSearchSystemType = async (value) => {
-    if (systemTypeOptions.length === 0) {
-      try {
-        const response = await getFieldValues('system', 'system_type')
-        setSystemTypeOptions(response.values || [])
-      } catch (error) {
-        console.error('获取系统类型列表失败', error)
-      }
-    }
-  }
 
   const validateIPv4 = (_, value) => {
     if (!value) {
@@ -189,11 +196,6 @@ const SystemAssets = () => {
       title: '名称',
       dataIndex: 'name',
       key: 'name'
-    },
-    {
-      title: '系统类型',
-      dataIndex: 'system_type',
-      key: 'system_type'
     },
     {
       title: 'IP地址',
@@ -220,6 +222,20 @@ const SystemAssets = () => {
           ))}
         </Space>
       )
+    },
+    {
+      title: '创建时间',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 180,
+      render: (text) => text ? new Date(text).toLocaleString('zh-CN') : '-'
+    },
+    {
+      title: '更新时间',
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      width: 180,
+      render: (text) => text ? new Date(text).toLocaleString('zh-CN') : '-'
     },
     {
       title: '操作',
@@ -320,30 +336,37 @@ const SystemAssets = () => {
           <Form.Item name="name" label="名称" rules={[{ required: true, message: '请输入名称' }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="system_type" label="系统类型">
-            <AutoComplete
-              options={systemTypeOptions.map(v => ({ value: v }))}
-              placeholder="如：Git、禅道等"
-              onSearch={handleSearchSystemType}
-            />
-          </Form.Item>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="ip_address" label="IP地址" rules={[{ validator: validateIPv4 }]}>
-                <Input />
+                <Input placeholder="可选" />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="port" label="端口" rules={[
-                { required: true, message: '请输入端口' },
                 { type: 'number', min: 1, max: 65535, message: '端口范围在 1-65535' }
               ]}>
-                <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                <InputNumber min={1} max={65535} style={{ width: '100%' }} placeholder="可选" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="default_account" label="默认账号">
+                <Input placeholder="默认登录账号" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="default_password" label="默认密码">
+                <Input.Password placeholder="默认登录密码" />
               </Form.Item>
             </Col>
           </Row>
           <Form.Item name="login_url" label="登录链接">
             <Input />
+          </Form.Item>
+          <Form.Item name="credentials" label="登录凭据（支持多个账号密码）">
+            <CredentialManager />
           </Form.Item>
           <Form.Item name="tag_ids" label="标签">
             <TagSelector />
@@ -364,11 +387,39 @@ const SystemAssets = () => {
         {viewData && (
           <Descriptions column={2} bordered>
             <Descriptions.Item label="名称">{viewData.name}</Descriptions.Item>
-            <Descriptions.Item label="系统类型">{viewData.system_type || '-'}</Descriptions.Item>
             <Descriptions.Item label="IP地址">{viewData.ip_address || '-'}</Descriptions.Item>
             <Descriptions.Item label="端口">{viewData.port || '-'}</Descriptions.Item>
+            <Descriptions.Item label="默认账号">{viewData.default_account || '-'}</Descriptions.Item>
+            <Descriptions.Item label="默认密码">
+              {viewData.default_password ? <PasswordDisplay value={viewData.default_password} /> : '-'}
+            </Descriptions.Item>
             <Descriptions.Item label="登录链接" span={2}>{viewData.login_url || '-'}</Descriptions.Item>
+            <Descriptions.Item label="登录凭据" span={2}>
+              {viewData.credentials && viewData.credentials.length > 0 ? (
+                <Table
+                  size="small"
+                  columns={[
+                    { title: '类型', dataIndex: 'credential_type', key: 'credential_type' },
+                    { title: '用户名/Key', dataIndex: 'key', key: 'key' },
+                    { 
+                      title: '密码/Value', 
+                      dataIndex: 'value', 
+                      key: 'value', 
+                      render: (text) => text ? <PasswordDisplay value={text} /> : '-' 
+                    },
+                    { title: '描述', dataIndex: 'description', key: 'description' }
+                  ]}
+                  dataSource={viewData.credentials}
+                  rowKey="id"
+                  pagination={false}
+                />
+              ) : (
+                '-'
+              )}
+            </Descriptions.Item>
             <Descriptions.Item label="备注" span={2}>{viewData.notes || '-'}</Descriptions.Item>
+            <Descriptions.Item label="创建时间">{viewData.created_at ? new Date(viewData.created_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
+            <Descriptions.Item label="更新时间">{viewData.updated_at ? new Date(viewData.updated_at).toLocaleString('zh-CN') : '-'}</Descriptions.Item>
           </Descriptions>
         )}
       </Modal>

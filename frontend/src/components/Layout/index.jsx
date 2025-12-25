@@ -21,7 +21,8 @@ import {
   BellOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
-  MenuUnfoldOutlined
+  MenuUnfoldOutlined,
+  SwapOutlined
 } from '@ant-design/icons'
 import { useAuthStore } from '@/store/auth'
 import './index.css'
@@ -114,6 +115,12 @@ const Layout = () => {
       key: '/settings',
       icon: <SettingOutlined />,
       label: '系统设置'
+    },
+    {
+      key: '/migration',
+      icon: <SwapOutlined />,
+      label: '数据库迁移',
+      adminOnly: true
     }
   ]
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Select, Tag, Space, message } from 'antd'
 import { getTags, createTag } from '@/api/tags'
 
@@ -7,13 +7,24 @@ const { Option } = Select
 const TagSelector = ({ value = [], onChange }) => {
   const [allTags, setAllTags] = useState([])
   const [selectedTagIds, setSelectedTagIds] = useState(value || [])
+  const valueRef = useRef(value)
+  const isInternalUpdate = useRef(false)
 
   useEffect(() => {
     fetchTags()
   }, [])
 
   useEffect(() => {
-    setSelectedTagIds(value || [])
+    // 只在外部value真正改变时更新（避免内部更新导致的循环）
+    if (!isInternalUpdate.current) {
+      const currentValue = JSON.stringify(value || [])
+      const currentRef = JSON.stringify(valueRef.current || [])
+      if (currentValue !== currentRef) {
+        valueRef.current = value
+        setSelectedTagIds(value || [])
+      }
+    }
+    isInternalUpdate.current = false
   }, [value])
 
   const fetchTags = async () => {
@@ -27,6 +38,7 @@ const TagSelector = ({ value = [], onChange }) => {
 
   const handleChange = async (tagIds) => {
     setSelectedTagIds(tagIds)
+    isInternalUpdate.current = true
     if (onChange) {
       onChange(tagIds)
     }
@@ -35,6 +47,7 @@ const TagSelector = ({ value = [], onChange }) => {
   const handleRemove = (tagId) => {
     const newTagIds = selectedTagIds.filter(id => id !== tagId)
     setSelectedTagIds(newTagIds)
+    isInternalUpdate.current = true
     if (onChange) {
       onChange(newTagIds)
     }

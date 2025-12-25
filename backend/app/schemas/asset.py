@@ -249,17 +249,20 @@ class SoftwareAsset(Asset):
 # 内部系统
 class SystemAssetCreate(AssetCreate):
     asset_type: str = "system"
-    system_type: Optional[str] = None
-    ip_address: Optional[str] = None
-    port: Optional[int] = None
+    ip_address: Optional[str] = None  # 非必填
+    port: Optional[int] = None  # 非必填
+    default_account: Optional[str] = None  # 默认账号
+    default_password: Optional[str] = None  # 默认密码（明文，后端会加密）
     login_url: Optional[str] = None
     notes: Optional[str] = None
 
 
 class SystemAsset(Asset):
-    system_type: Optional[str] = None
     ip_address: Optional[str] = None
     port: Optional[int] = None
+    default_account: Optional[str] = None
+    default_password: Optional[str] = None  # 管理员可见明文，普通用户为None
+    default_password_encrypted: Optional[str] = None  # 加密值
     login_url: Optional[str] = None
     notes: Optional[str] = None
     
@@ -272,7 +275,8 @@ class DatabaseAssetCreate(AssetCreate):
     asset_type: str = "database"
     db_type: str
     host: str
-    port: int
+    port: int  # 主端口
+    ports: Optional[List[Dict[str, Any]]] = None  # 多端口数据，格式：[{"name": "HTTP", "port": 8123}]
     databases: Optional[List[str]] = None
     quota: Optional[str] = None
     notes: Optional[str] = None
@@ -282,6 +286,7 @@ class DatabaseAsset(Asset):
     db_type: str
     host: str
     port: int
+    ports: Optional[List[Dict[str, Any]]] = None
     databases: Optional[List[str]] = None
     quota: Optional[str] = None
     notes: Optional[str] = None
@@ -299,6 +304,9 @@ class HardwareAssetCreate(AssetCreate):
     serial_number: Optional[str] = None
     purchase_date: Optional[date] = None
     purchase_price: Optional[float] = None
+    responsible_person: Optional[str] = None  # 责任人
+    user: Optional[str] = None  # 使用人
+    usage_area: Optional[str] = None  # 使用区域
     notes: Optional[str] = None
 
 
@@ -309,6 +317,9 @@ class HardwareAsset(Asset):
     serial_number: Optional[str] = None
     purchase_date: Optional[date] = None
     purchase_price: Optional[float] = None
+    responsible_person: Optional[str] = None
+    user: Optional[str] = None
+    usage_area: Optional[str] = None
     notes: Optional[str] = None
     
     class Config:
